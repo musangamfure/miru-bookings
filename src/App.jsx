@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 const PRICE_PER_TUBE = 600;
 
@@ -10,7 +10,7 @@ const formatDate = (dateStr) => {
   ).padStart(2, "0")}/${d.getFullYear()}`;
 };
 
-const deliveryDate = (bookingDate) => {
+const getDeliveryDate = (bookingDate) => {
   if (!bookingDate) return "";
   const d = new Date(bookingDate);
   d.setDate(d.getDate() + 30);
@@ -18,9 +18,16 @@ const deliveryDate = (bookingDate) => {
 };
 
 const buildWhatsAppMessage = (b) => {
-  const delivery = formatDate(deliveryDate(b.bookingDate));
+  const delivery = formatDate(getDeliveryDate(b.bookingDate));
   const total = (b.tubes * PRICE_PER_TUBE).toLocaleString();
-  return `🍄 Dear ${b.name},\nThank you for booking ${b.tubes} mushroom tube(s) with Miru Mushrooms! 🌿\n\n📦 Delivery Date: ${delivery}\n(30 days from your booking date)\n\n💰 Total Amount: RWF ${total}\n\n🙏 Thank you for trusting us - Miru Mushrooms Team 🍄`;
+  return (
+    `🍄 Dear ${b.name},\n` +
+    `Thank you for booking ${b.tubes} mushroom tube(s) with Miru Mushrooms! 🌿\n\n` +
+    `📦 Delivery Date: ${delivery}\n` +
+    `(30 days from your booking date)\n\n` +
+    `💰 Total Amount: RWF ${total}\n\n` +
+    `🙏 Thank you for trusting us - Miru Mushrooms Team 🍄`
+  );
 };
 
 const buildWaLink = (b) => {
@@ -29,47 +36,37 @@ const buildWaLink = (b) => {
   return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
 };
 
-// Excel export using SheetJS
 const exportToExcel = (bookings) => {
-  import("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js")
-    .then(() => {
-      const XLSX = window.XLSX;
-      const wb = XLSX.utils.book_new();
-      const headers = [
-        "No.",
-        "Farmer Name",
-        "Telephone",
-        "Tubes Booked",
-        "Amount Paid (RWF)",
-        "Booking Date",
-        "Farm Location",
-        "Delivery Date",
-      ];
-      const rows = bookings.map((b, i) => [
-        i + 1,
-        b.name,
-        b.phone,
-        b.tubes,
-        b.tubes * PRICE_PER_TUBE,
-        formatDate(b.bookingDate),
-        b.location,
-        formatDate(deliveryDate(b.bookingDate)),
-      ]);
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = [
-        { wch: 5 },
-        { wch: 25 },
-        { wch: 18 },
-        { wch: 14 },
-        { wch: 18 },
-        { wch: 14 },
-        { wch: 20 },
-        { wch: 14 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws, "Bookings");
-      XLSX.writeFile(wb, "Miru_Mushrooms_Bookings.xlsx");
-    })
-    .catch(() => alert("Could not load Excel library. Please try again."));
+  import(
+    "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+  ).then(() => {
+    const XLSX = window.XLSX;
+    const wb = XLSX.utils.book_new();
+    const headers = [
+      "No.",
+      "Farmer Name",
+      "Telephone",
+      "Tubes Booked",
+      "Amount Paid (RWF)",
+      "Booking Date",
+      "Farm Location",
+      "Delivery Date",
+    ];
+    const rows = bookings.map((b, i) => [
+      i + 1,
+      b.name,
+      b.phone,
+      b.tubes,
+      b.tubes * PRICE_PER_TUBE,
+      formatDate(b.bookingDate),
+      b.location,
+      formatDate(getDeliveryDate(b.bookingDate)),
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws["!cols"] = [5, 25, 18, 14, 18, 14, 20, 14].map((w) => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, "Bookings");
+    XLSX.writeFile(wb, "Miru_Mushrooms_Bookings.xlsx");
+  });
 };
 
 const EMPTY_FORM = {
@@ -80,6 +77,445 @@ const EMPTY_FORM = {
   location: "",
 };
 
+// ── WhatsApp Modal ─────────────────────────────────────────────
+function WhatsAppModal({ booking, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const msg = buildWhatsAppMessage(booking);
+  const link = buildWaLink(booking);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.85)",
+        zIndex: 9999,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-end",
+      }}
+    >
+      <div
+        style={{
+          background: "#1a2e1a",
+          borderRadius: "20px 20px 0 0",
+          padding: "0 0 env(safe-area-inset-bottom,16px)",
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Handle bar */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            padding: "12px 0 0",
+          }}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 4,
+              borderRadius: 2,
+              background: "#4a7c59",
+            }}
+          />
+        </div>
+
+        {/* Header */}
+        <div
+          style={{
+            padding: "16px 20px 12px",
+            borderBottom: "1px solid #2d4a2d",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 17, fontWeight: "bold", color: "#c8e6c9" }}>
+              💬 WhatsApp Message
+            </div>
+            <div style={{ fontSize: 12, color: "#6a9c6a", marginTop: 2 }}>
+              For {booking.name}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              border: "none",
+              background: "#2d4a2d",
+              color: "#c8e6c9",
+              fontSize: 16,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* TOP WhatsApp button */}
+        <div style={{ padding: "14px 20px 0" }}>
+          <a
+            href={link}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              padding: "14px 0",
+              borderRadius: 12,
+              background: "#25D366",
+              color: "white",
+              fontWeight: "bold",
+              fontSize: 16,
+              textDecoration: "none",
+              boxShadow: "0 4px 20px rgba(37,211,102,0.35)",
+            }}
+          >
+            <span style={{ fontSize: 20 }}>💬</span> Open in WhatsApp
+          </a>
+        </div>
+
+        {/* Message preview */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+          <div
+            style={{
+              fontSize: 11,
+              color: "#4a7c59",
+              textTransform: "uppercase",
+              letterSpacing: 1,
+              marginBottom: 10,
+            }}
+          >
+            Message Preview
+          </div>
+          <div
+            style={{
+              background: "#0f1a0f",
+              border: "1px solid #2d4a2d",
+              borderRadius: 12,
+              padding: 16,
+              fontSize: 14,
+              color: "#c8e6c9",
+              whiteSpace: "pre-line",
+              lineHeight: 1.8,
+            }}
+          >
+            {msg}
+          </div>
+        </div>
+
+        {/* BOTTOM buttons */}
+        <div style={{ padding: "0 20px 16px", display: "flex", gap: 10 }}>
+          <button
+            onClick={handleCopy}
+            style={{
+              flex: 1,
+              padding: "14px 0",
+              borderRadius: 12,
+              border: "1px solid #4a7c59",
+              background: copied ? "#1a3d1a" : "transparent",
+              color: copied ? "#4ade80" : "#c8e6c9",
+              fontSize: 15,
+              fontWeight: "bold",
+              cursor: "pointer",
+              fontFamily: "Georgia, serif",
+              transition: "all 0.2s",
+            }}
+          >
+            {copied ? "✓ Copied!" : "📋 Copy Message"}
+          </button>
+          <a
+            href={link}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              flex: 1,
+              padding: "14px 0",
+              borderRadius: 12,
+              background: "#25D366",
+              color: "white",
+              fontWeight: "bold",
+              fontSize: 15,
+              textDecoration: "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+          >
+            💬 Send
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Delete Modal ───────────────────────────────────────────────
+function DeleteModal({ onConfirm, onCancel }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.85)",
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "flex-end",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          background: "#1a2e1a",
+          borderRadius: "20px 20px 0 0",
+          padding: "20px 20px calc(20px + env(safe-area-inset-bottom,0px))",
+          fontFamily: "Georgia, serif",
+        }}
+      >
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <div style={{ fontSize: 36, marginBottom: 10 }}>🗑</div>
+          <div style={{ fontSize: 18, fontWeight: "bold", color: "#c8e6c9" }}>
+            Delete Booking?
+          </div>
+          <div style={{ fontSize: 14, color: "#6a9c6a", marginTop: 6 }}>
+            This cannot be undone.
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1,
+              padding: 14,
+              borderRadius: 12,
+              border: "1px solid #4a7c59",
+              background: "transparent",
+              color: "#c8e6c9",
+              fontSize: 15,
+              cursor: "pointer",
+              fontFamily: "Georgia, serif",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              padding: 14,
+              borderRadius: 12,
+              border: "none",
+              background: "#dc2626",
+              color: "white",
+              fontSize: 15,
+              fontWeight: "bold",
+              cursor: "pointer",
+              fontFamily: "Georgia, serif",
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Toast ──────────────────────────────────────────────────────
+function Toast({ msg, type }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 16,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 9998,
+        background: type === "error" ? "#7f1d1d" : "#1a3d1a",
+        color: "#e8dcc8",
+        padding: "12px 20px",
+        borderRadius: 24,
+        fontSize: 14,
+        fontFamily: "Georgia, serif",
+        border: `1px solid ${type === "error" ? "#dc2626" : "#4ade80"}`,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+        whiteSpace: "nowrap",
+        animation: "fadeIn 0.2s ease",
+      }}
+    >
+      {type === "error" ? "🗑 " : "✓ "}
+      {msg}
+    </div>
+  );
+}
+
+// ── Booking Card ───────────────────────────────────────────────
+function BookingCard({ b, onEdit, onDelete, onWhatsApp }) {
+  const delivery = formatDate(getDeliveryDate(b.bookingDate));
+  const isUpcoming =
+    getDeliveryDate(b.bookingDate) >= new Date().toISOString().split("T")[0];
+
+  return (
+    <div
+      style={{
+        background: "#1a2e1a",
+        border: "1px solid #2d4a2d",
+        borderRadius: 14,
+        padding: 16,
+        marginBottom: 10,
+      }}
+    >
+      {/* Top row */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: 10,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              background: "#2d4a2d",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 17,
+              fontWeight: "bold",
+              color: "#4ade80",
+              flexShrink: 0,
+            }}
+          >
+            {b.name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: "bold", color: "#c8e6c9" }}>
+              {b.name}
+            </div>
+            <div style={{ fontSize: 12, color: "#6a9c6a" }}>📞 {b.phone}</div>
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 18, fontWeight: "bold", color: "#4ade80" }}>
+            {b.tubes.toLocaleString()}
+          </div>
+          <div style={{ fontSize: 11, color: "#6a9c6a" }}>tubes</div>
+        </div>
+      </div>
+
+      {/* Info chips */}
+      <div
+        style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}
+      >
+        {[
+          { icon: "📍", text: b.location },
+          { icon: "📅", text: formatDate(b.bookingDate) },
+          { icon: "📦", text: `Delivery: ${delivery}`, green: true },
+          {
+            icon: "💰",
+            text: `RWF ${(b.tubes * PRICE_PER_TUBE).toLocaleString()}`,
+          },
+        ].map((chip) => (
+          <span
+            key={chip.text}
+            style={{
+              fontSize: 12,
+              padding: "4px 10px",
+              borderRadius: 20,
+              background: "#0f1a0f",
+              color: chip.green ? "#4ade80" : "#9ab89a",
+              border: `1px solid ${chip.green ? "#2d4a2d" : "#1a2e1a"}`,
+            }}
+          >
+            {chip.icon} {chip.text}
+          </span>
+        ))}
+      </div>
+
+      {/* Action buttons */}
+      <div
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}
+      >
+        <button
+          onClick={() => onWhatsApp(b)}
+          style={{
+            gridColumn: "1 / 3",
+            padding: "12px 0",
+            borderRadius: 10,
+            border: "none",
+            background: "#25D366",
+            color: "white",
+            fontSize: 14,
+            fontWeight: "bold",
+            cursor: "pointer",
+            fontFamily: "Georgia, serif",
+          }}
+        >
+          💬 WhatsApp
+        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button
+            onClick={() => onEdit(b)}
+            style={{
+              flex: 1,
+              padding: "12px 0",
+              borderRadius: 10,
+              border: "1px solid #2d4a2d",
+              background: "transparent",
+              color: "#9ab89a",
+              fontSize: 13,
+              cursor: "pointer",
+              fontFamily: "Georgia, serif",
+            }}
+          >
+            ✏
+          </button>
+          <button
+            onClick={() => onDelete(b.id)}
+            style={{
+              flex: 1,
+              padding: "12px 0",
+              borderRadius: 10,
+              border: "1px solid #7f1d1d",
+              background: "transparent",
+              color: "#f87171",
+              fontSize: 13,
+              cursor: "pointer",
+              fontFamily: "Georgia, serif",
+            }}
+          >
+            🗑
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main App ───────────────────────────────────────────────────
 export default function App() {
   const [bookings, setBookings] = useState(() => {
     try {
@@ -88,14 +524,14 @@ export default function App() {
       return [];
     }
   });
-  const [view, setView] = useState("dashboard"); // dashboard | add | bookings
+  const [view, setView] = useState("dashboard");
   const [form, setForm] = useState(EMPTY_FORM);
   const [editId, setEditId] = useState(null);
   const [errors, setErrors] = useState({});
-  const [copiedId, setCopiedId] = useState(null);
-  const [deleteId, setDeleteId] = useState(null);
-  const [search, setSearch] = useState("");
   const [toast, setToast] = useState(null);
+  const [deleteId, setDeleteId] = useState(null);
+  const [waBooking, setWaBooking] = useState(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     localStorage.setItem("miru_bookings", JSON.stringify(bookings));
@@ -131,8 +567,10 @@ export default function App() {
       setEditId(null);
       showToast("Booking updated!");
     } else {
-      const newBooking = { ...form, tubes: Number(form.tubes), id: Date.now() };
-      setBookings([...bookings, newBooking]);
+      setBookings([
+        ...bookings,
+        { ...form, tubes: Number(form.tubes), id: Date.now() },
+      ]);
       showToast("Booking added!");
     }
     setForm(EMPTY_FORM);
@@ -149,7 +587,7 @@ export default function App() {
       location: b.location,
     });
     setEditId(b.id);
-    setView("add");
+    setView("form");
   };
 
   const handleDelete = (id) => {
@@ -158,14 +596,12 @@ export default function App() {
     showToast("Booking deleted.", "error");
   };
 
-  const handleCopy = (b) => {
-    navigator.clipboard.writeText(buildWhatsAppMessage(b)).then(() => {
-      setCopiedId(b.id);
-      showToast("Message copied to clipboard!");
-      setTimeout(() => setCopiedId(null), 2000);
-    });
-  };
-
+  const totalTubes = bookings.reduce((s, b) => s + b.tubes, 0);
+  const totalRevenue = totalTubes * PRICE_PER_TUBE;
+  const today = new Date().toISOString().split("T")[0];
+  const upcoming = bookings.filter(
+    (b) => getDeliveryDate(b.bookingDate) >= today
+  ).length;
   const filtered = bookings.filter(
     (b) =>
       b.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -173,111 +609,25 @@ export default function App() {
       b.phone.includes(search)
   );
 
-  const totalTubes = bookings.reduce((s, b) => s + b.tubes, 0);
-  const totalRevenue = totalTubes * PRICE_PER_TUBE;
-  const today = new Date().toISOString().split("T")[0];
-  const upcoming = bookings.filter(
-    (b) => deliveryDate(b.bookingDate) >= today
-  ).length;
-
   return (
     <div
       style={{
         minHeight: "100vh",
         background: "#0f1a0f",
-        fontFamily: "'Georgia', serif",
+        fontFamily: "Georgia, serif",
         color: "#e8dcc8",
+        paddingBottom: 80,
       }}
     >
-      {/* ── Toast ── */}
-      {toast && (
-        <div
-          style={{
-            position: "fixed",
-            top: 20,
-            right: 20,
-            zIndex: 9999,
-            background: toast.type === "error" ? "#7f1d1d" : "#1a3d1a",
-            color: "#e8dcc8",
-            padding: "12px 20px",
-            borderRadius: 8,
-            border: `1px solid ${
-              toast.type === "error" ? "#dc2626" : "#4ade80"
-            }`,
-            fontSize: 14,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-            animation: "fadeIn 0.2s ease",
-          }}
-        >
-          {toast.type === "error" ? "🗑 " : "✓ "}
-          {toast.msg}
-        </div>
-      )}
-
-      {/* ── Delete Modal ── */}
+      {toast && <Toast {...toast} />}
       {deleteId && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.7)",
-            zIndex: 9998,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            style={{
-              background: "#1a2e1a",
-              border: "1px solid #4a7c59",
-              borderRadius: 12,
-              padding: 32,
-              maxWidth: 360,
-              width: "90%",
-              textAlign: "center",
-            }}
-          >
-            <div style={{ fontSize: 36, marginBottom: 12 }}>🗑</div>
-            <div style={{ fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>
-              Delete Booking?
-            </div>
-            <div style={{ fontSize: 14, color: "#9ab89a", marginBottom: 24 }}>
-              This cannot be undone.
-            </div>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <button
-                onClick={() => setDeleteId(null)}
-                style={{
-                  padding: "10px 24px",
-                  borderRadius: 8,
-                  border: "1px solid #4a7c59",
-                  background: "transparent",
-                  color: "#e8dcc8",
-                  cursor: "pointer",
-                  fontSize: 14,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(deleteId)}
-                style={{
-                  padding: "10px 24px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#dc2626",
-                  color: "white",
-                  cursor: "pointer",
-                  fontSize: 14,
-                  fontWeight: "bold",
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeleteModal
+          onConfirm={() => handleDelete(deleteId)}
+          onCancel={() => setDeleteId(null)}
+        />
+      )}
+      {waBooking && (
+        <WhatsAppModal booking={waBooking} onClose={() => setWaBooking(null)} />
       )}
 
       {/* ── Header ── */}
@@ -285,37 +635,32 @@ export default function App() {
         style={{
           background: "#1a2e1a",
           borderBottom: "1px solid #2d4a2d",
-          padding: "0 24px",
+          padding: "12px 16px",
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
         }}
       >
         <div
           style={{
-            maxWidth: 1100,
-            margin: "0 auto",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            height: 64,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 28 }}>🍄</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 24 }}>🍄</span>
             <div>
               <div
-                style={{
-                  fontSize: 18,
-                  fontWeight: "bold",
-                  color: "#c8e6c9",
-                  letterSpacing: 0.5,
-                }}
+                style={{ fontSize: 15, fontWeight: "bold", color: "#c8e6c9" }}
               >
                 Miru Mushrooms
               </div>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: 10,
                   color: "#6a9c6a",
-                  letterSpacing: 2,
+                  letterSpacing: 1.5,
                   textTransform: "uppercase",
                 }}
               >
@@ -323,94 +668,61 @@ export default function App() {
               </div>
             </div>
           </div>
-          <nav style={{ display: "flex", gap: 4 }}>
-            {[
-              ["dashboard", "📊 Dashboard"],
-              ["bookings", "📋 Bookings"],
-              ["add", "➕ New Booking"],
-            ].map(([v, label]) => (
-              <button
-                key={v}
-                onClick={() => {
-                  setView(v);
-                  if (v !== "add") {
-                    setForm(EMPTY_FORM);
-                    setEditId(null);
-                    setErrors({});
-                  }
-                }}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: 8,
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 13,
-                  fontFamily: "Georgia, serif",
-                  background: view === v ? "#4a7c59" : "transparent",
-                  color: view === v ? "#fff" : "#9ab89a",
-                  fontWeight: view === v ? "bold" : "normal",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
+          <button
+            onClick={() => exportToExcel(bookings)}
+            style={{
+              padding: "8px 14px",
+              borderRadius: 20,
+              border: "1px solid #4a7c59",
+              background: "transparent",
+              color: "#c8e6c9",
+              fontSize: 12,
+              cursor: "pointer",
+              fontFamily: "Georgia, serif",
+            }}
+          >
+            ⬇ Excel
+          </button>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 24px" }}>
-        {/* ══════════ DASHBOARD ══════════ */}
+      {/* ── Content ── */}
+      <div style={{ padding: "16px 16px 0" }}>
+        {/* DASHBOARD */}
         {view === "dashboard" && (
           <div>
-            <div style={{ marginBottom: 32 }}>
-              <h1
-                style={{
-                  fontSize: 28,
-                  fontWeight: "bold",
-                  color: "#c8e6c9",
-                  margin: 0,
-                }}
-              >
-                Overview
-              </h1>
-              <p style={{ color: "#6a9c6a", marginTop: 4, fontSize: 14 }}>
-                Live summary of all bookings
-              </p>
-            </div>
-
-            {/* KPI Cards */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: 16,
-                marginBottom: 32,
+                gridTemplateColumns: "1fr 1fr",
+                gap: 10,
+                marginBottom: 16,
               }}
             >
               {[
                 {
-                  label: "Total Bookings",
+                  label: "Bookings",
                   value: bookings.length,
                   icon: "📋",
-                  color: "#4a7c59",
+                  accent: "#4a7c59",
                 },
                 {
-                  label: "Total Tubes Booked",
+                  label: "Tubes Booked",
                   value: totalTubes.toLocaleString(),
                   icon: "🌱",
-                  color: "#2d6a4f",
+                  accent: "#2d6a4f",
                 },
                 {
-                  label: "Total Revenue (RWF)",
+                  label: "Revenue (RWF)",
                   value: totalRevenue.toLocaleString(),
                   icon: "💰",
-                  color: "#1b4332",
+                  accent: "#1b4332",
                 },
                 {
-                  label: "Upcoming Deliveries",
+                  label: "Upcoming",
                   value: upcoming,
                   icon: "📦",
-                  color: "#3d5a3e",
+                  accent: "#3d5a3e",
                 },
               ].map((k) => (
                 <div
@@ -419,14 +731,14 @@ export default function App() {
                     background: "#1a2e1a",
                     border: "1px solid #2d4a2d",
                     borderRadius: 12,
-                    padding: 20,
-                    borderLeft: `4px solid ${k.color}`,
+                    padding: 14,
+                    borderLeft: `3px solid ${k.accent}`,
                   }}
                 >
-                  <div style={{ fontSize: 24, marginBottom: 8 }}>{k.icon}</div>
+                  <div style={{ fontSize: 20, marginBottom: 4 }}>{k.icon}</div>
                   <div
                     style={{
-                      fontSize: 26,
+                      fontSize: 22,
                       fontWeight: "bold",
                       color: "#c8e6c9",
                     }}
@@ -435,11 +747,11 @@ export default function App() {
                   </div>
                   <div
                     style={{
-                      fontSize: 12,
+                      fontSize: 11,
                       color: "#6a9c6a",
-                      marginTop: 4,
+                      marginTop: 2,
                       textTransform: "uppercase",
-                      letterSpacing: 1,
+                      letterSpacing: 0.8,
                     }}
                   >
                     {k.label}
@@ -448,82 +760,75 @@ export default function App() {
               ))}
             </div>
 
-            {/* Recent Bookings */}
             <div
               style={{
                 background: "#1a2e1a",
                 border: "1px solid #2d4a2d",
-                borderRadius: 12,
-                padding: 24,
+                borderRadius: 14,
+                padding: 16,
               }}
             >
               <div
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 20,
+                  fontSize: 14,
+                  fontWeight: "bold",
+                  color: "#c8e6c9",
+                  marginBottom: 12,
                 }}
               >
-                <h2 style={{ margin: 0, fontSize: 16, color: "#c8e6c9" }}>
-                  Recent Bookings
-                </h2>
-                <button
-                  onClick={() => exportToExcel(bookings)}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: 8,
-                    border: "1px solid #4a7c59",
-                    background: "transparent",
-                    color: "#c8e6c9",
-                    cursor: "pointer",
-                    fontSize: 13,
-                    fontFamily: "Georgia, serif",
-                  }}
-                >
-                  ⬇ Download Excel
-                </button>
+                Recent Bookings
               </div>
               {bookings.length === 0 ? (
                 <div
                   style={{
                     textAlign: "center",
-                    padding: "40px 0",
+                    padding: "30px 0",
                     color: "#4a7c59",
                   }}
                 >
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>🌱</div>
-                  <div>No bookings yet. Add your first one!</div>
+                  <div style={{ fontSize: 36, marginBottom: 10 }}>🌱</div>
+                  <div style={{ fontSize: 14 }}>No bookings yet</div>
                 </div>
               ) : (
                 [...bookings]
                   .reverse()
-                  .slice(0, 5)
+                  .slice(0, 3)
                   .map((b) => (
                     <div
                       key={b.id}
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "12px 0",
+                        padding: "10px 0",
                         borderBottom: "1px solid #2d4a2d",
                       }}
                     >
                       <div>
-                        <div style={{ fontWeight: "bold", color: "#c8e6c9" }}>
+                        <div
+                          style={{
+                            fontWeight: "bold",
+                            color: "#c8e6c9",
+                            fontSize: 14,
+                          }}
+                        >
                           {b.name}
                         </div>
-                        <div style={{ fontSize: 12, color: "#6a9c6a" }}>
-                          {b.location} · {formatDate(b.bookingDate)}
+                        <div style={{ fontSize: 11, color: "#6a9c6a" }}>
+                          📍 {b.location}
                         </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ color: "#4ade80", fontWeight: "bold" }}>
+                        <div
+                          style={{
+                            color: "#4ade80",
+                            fontWeight: "bold",
+                            fontSize: 14,
+                          }}
+                        >
                           {b.tubes.toLocaleString()} tubes
                         </div>
-                        <div style={{ fontSize: 12, color: "#6a9c6a" }}>
-                          📦 {formatDate(deliveryDate(b.bookingDate))}
+                        <div style={{ fontSize: 11, color: "#6a9c6a" }}>
+                          📦 {formatDate(getDeliveryDate(b.bookingDate))}
                         </div>
                       </div>
                     </div>
@@ -533,33 +838,76 @@ export default function App() {
           </div>
         )}
 
-        {/* ══════════ ADD / EDIT FORM ══════════ */}
-        {view === "add" && (
-          <div style={{ maxWidth: 600 }}>
-            <div style={{ marginBottom: 28 }}>
-              <h1
+        {/* BOOKINGS LIST */}
+        {view === "bookings" && (
+          <div>
+            <input
+              placeholder="🔍 Search name, location, phone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "12px 14px",
+                borderRadius: 10,
+                border: "1px solid #2d4a2d",
+                background: "#1a2e1a",
+                color: "#e8dcc8",
+                fontSize: 14,
+                fontFamily: "Georgia, serif",
+                outline: "none",
+                marginBottom: 14,
+                boxSizing: "border-box",
+              }}
+            />
+            {filtered.length === 0 ? (
+              <div
                 style={{
-                  fontSize: 24,
-                  fontWeight: "bold",
-                  color: "#c8e6c9",
-                  margin: 0,
+                  textAlign: "center",
+                  padding: "50px 0",
+                  color: "#4a7c59",
                 }}
               >
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🌱</div>
+                <div>{search ? "No results found." : "No bookings yet."}</div>
+              </div>
+            ) : (
+              [...filtered]
+                .reverse()
+                .map((b) => (
+                  <BookingCard
+                    key={b.id}
+                    b={b}
+                    onEdit={handleEdit}
+                    onDelete={(id) => setDeleteId(id)}
+                    onWhatsApp={setWaBooking}
+                  />
+                ))
+            )}
+          </div>
+        )}
+
+        {/* FORM */}
+        {view === "form" && (
+          <div>
+            <div style={{ marginBottom: 20 }}>
+              <div
+                style={{ fontSize: 20, fontWeight: "bold", color: "#c8e6c9" }}
+              >
                 {editId ? "Edit Booking" : "New Booking"}
-              </h1>
-              <p style={{ color: "#6a9c6a", marginTop: 4, fontSize: 14 }}>
+              </div>
+              <div style={{ fontSize: 13, color: "#6a9c6a", marginTop: 4 }}>
                 {editId
-                  ? "Update the booking details below."
-                  : "Fill in the details to register a new booking."}
-              </p>
+                  ? "Update the details below."
+                  : "Fill in the farmer's details."}
+              </div>
             </div>
 
             <div
               style={{
                 background: "#1a2e1a",
                 border: "1px solid #2d4a2d",
-                borderRadius: 12,
-                padding: 28,
+                borderRadius: 14,
+                padding: 18,
               }}
             >
               {[
@@ -577,7 +925,7 @@ export default function App() {
                 },
                 {
                   key: "tubes",
-                  label: "Number of Tubes Booked",
+                  label: "Tubes Booked",
                   placeholder: "e.g. 500",
                   type: "number",
                 },
@@ -590,19 +938,19 @@ export default function App() {
                 {
                   key: "location",
                   label: "Farm Location",
-                  placeholder: "e.g. Musanze, Northern Province",
+                  placeholder: "e.g. Musanze",
                   type: "text",
                 },
               ].map((field) => (
-                <div key={field.key} style={{ marginBottom: 20 }}>
+                <div key={field.key} style={{ marginBottom: 16 }}>
                   <label
                     style={{
                       display: "block",
-                      fontSize: 13,
+                      fontSize: 12,
                       color: "#9ab89a",
                       marginBottom: 6,
                       textTransform: "uppercase",
-                      letterSpacing: 0.5,
+                      letterSpacing: 0.8,
                     }}
                   >
                     {field.label}
@@ -617,9 +965,8 @@ export default function App() {
                     }}
                     style={{
                       width: "100%",
-                      padding: "12px 14px",
-                      borderRadius: 8,
-                      boxSizing: "border-box",
+                      padding: "13px 14px",
+                      borderRadius: 10,
                       border: `1px solid ${
                         errors[field.key] ? "#dc2626" : "#2d4a2d"
                       }`,
@@ -628,6 +975,7 @@ export default function App() {
                       fontSize: 15,
                       fontFamily: "Georgia, serif",
                       outline: "none",
+                      boxSizing: "border-box",
                     }}
                   />
                   {errors[field.key] && (
@@ -640,34 +988,62 @@ export default function App() {
                 </div>
               ))}
 
-              {/* Preview */}
+              {/* Amount preview */}
+              {form.tubes && Number(form.tubes) > 0 && (
+                <div
+                  style={{
+                    background: "#0a140a",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    marginBottom: 16,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ fontSize: 13, color: "#6a9c6a" }}>
+                    Amount to pay
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "bold",
+                      color: "#4ade80",
+                    }}
+                  >
+                    RWF {(Number(form.tubes) * PRICE_PER_TUBE).toLocaleString()}
+                  </span>
+                </div>
+              )}
+
+              {/* WhatsApp preview */}
               {form.name && form.tubes && form.bookingDate && (
                 <div
                   style={{
                     background: "#0a140a",
                     border: "1px solid #2d4a2d",
-                    borderRadius: 8,
-                    padding: 16,
-                    marginBottom: 20,
+                    borderRadius: 10,
+                    padding: 14,
+                    marginBottom: 18,
                   }}
                 >
                   <div
                     style={{
                       fontSize: 11,
                       color: "#4a7c59",
-                      textTransform: "uppercase",
                       letterSpacing: 1,
+                      textTransform: "uppercase",
                       marginBottom: 8,
                     }}
                   >
-                    WhatsApp Message Preview
+                    💬 Message Preview
                   </div>
                   <div
                     style={{
                       fontSize: 13,
                       color: "#9ab89a",
                       whiteSpace: "pre-line",
-                      lineHeight: 1.7,
+                      lineHeight: 1.8,
                     }}
                   >
                     {buildWhatsAppMessage({
@@ -678,13 +1054,13 @@ export default function App() {
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: 12 }}>
+              <div style={{ display: "flex", gap: 10 }}>
                 <button
                   onClick={handleSubmit}
                   style={{
                     flex: 1,
-                    padding: "13px 0",
-                    borderRadius: 8,
+                    padding: 14,
+                    borderRadius: 10,
                     border: "none",
                     background: "#4a7c59",
                     color: "white",
@@ -704,8 +1080,8 @@ export default function App() {
                     setView("bookings");
                   }}
                   style={{
-                    padding: "13px 20px",
-                    borderRadius: 8,
+                    padding: "14px 18px",
+                    borderRadius: 10,
                     border: "1px solid #2d4a2d",
                     background: "transparent",
                     color: "#9ab89a",
@@ -720,298 +1096,81 @@ export default function App() {
             </div>
           </div>
         )}
+      </div>
 
-        {/* ══════════ BOOKINGS TABLE ══════════ */}
-        {view === "bookings" && (
-          <div>
-            <div
+      {/* ── Bottom Nav ── */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: "#1a2e1a",
+          borderTop: "1px solid #2d4a2d",
+          display: "flex",
+          zIndex: 100,
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        }}
+      >
+        {[
+          { v: "dashboard", icon: "📊", label: "Dashboard" },
+          { v: "bookings", icon: "📋", label: "Bookings" },
+          { v: "form", icon: "➕", label: "Add" },
+        ].map((tab) => (
+          <button
+            key={tab.v}
+            onClick={() => {
+              setView(tab.v);
+              if (tab.v !== "form") {
+                setForm(EMPTY_FORM);
+                setEditId(null);
+                setErrors({});
+              }
+            }}
+            style={{
+              flex: 1,
+              padding: "10px 0",
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 3,
+            }}
+          >
+            <span style={{ fontSize: 22 }}>{tab.icon}</span>
+            <span
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: 24,
-                flexWrap: "wrap",
-                gap: 16,
+                fontSize: 10,
+                color: view === tab.v ? "#4ade80" : "#6a9c6a",
+                fontFamily: "Georgia, serif",
+                letterSpacing: 0.5,
               }}
             >
-              <div>
-                <h1
-                  style={{
-                    fontSize: 24,
-                    fontWeight: "bold",
-                    color: "#c8e6c9",
-                    margin: 0,
-                  }}
-                >
-                  All Bookings
-                </h1>
-                <p style={{ color: "#6a9c6a", marginTop: 4, fontSize: 14 }}>
-                  {bookings.length} booking{bookings.length !== 1 ? "s" : ""}{" "}
-                  registered
-                </p>
-              </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <input
-                  placeholder="🔍 Search name, location, phone..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    border: "1px solid #2d4a2d",
-                    background: "#1a2e1a",
-                    color: "#e8dcc8",
-                    fontSize: 13,
-                    fontFamily: "Georgia, serif",
-                    width: 240,
-                    outline: "none",
-                  }}
-                />
-                <button
-                  onClick={() => exportToExcel(bookings)}
-                  style={{
-                    padding: "10px 16px",
-                    borderRadius: 8,
-                    border: "1px solid #4a7c59",
-                    background: "transparent",
-                    color: "#c8e6c9",
-                    cursor: "pointer",
-                    fontSize: 13,
-                    fontFamily: "Georgia, serif",
-                  }}
-                >
-                  ⬇ Excel
-                </button>
-                <button
-                  onClick={() => {
-                    setForm(EMPTY_FORM);
-                    setEditId(null);
-                    setErrors({});
-                    setView("add");
-                  }}
-                  style={{
-                    padding: "10px 16px",
-                    borderRadius: 8,
-                    border: "none",
-                    background: "#4a7c59",
-                    color: "white",
-                    cursor: "pointer",
-                    fontSize: 13,
-                    fontFamily: "Georgia, serif",
-                    fontWeight: "bold",
-                  }}
-                >
-                  ➕ Add Booking
-                </button>
-              </div>
-            </div>
-
-            {filtered.length === 0 ? (
+              {tab.label}
+            </span>
+            {view === tab.v && (
               <div
                 style={{
-                  textAlign: "center",
-                  padding: "60px 0",
-                  color: "#4a7c59",
+                  width: 20,
+                  height: 2,
+                  borderRadius: 1,
+                  background: "#4ade80",
+                  marginTop: 1,
                 }}
-              >
-                <div style={{ fontSize: 48, marginBottom: 16 }}>🌱</div>
-                <div style={{ fontSize: 18 }}>
-                  {search
-                    ? "No bookings match your search."
-                    : "No bookings yet."}
-                </div>
-              </div>
-            ) : (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 12 }}
-              >
-                {[...filtered].reverse().map((b, i) => (
-                  <div
-                    key={b.id}
-                    style={{
-                      background: "#1a2e1a",
-                      border: "1px solid #2d4a2d",
-                      borderRadius: 12,
-                      padding: 20,
-                      transition: "border-color 0.2s",
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.borderColor = "#4a7c59")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.borderColor = "#2d4a2d")
-                    }
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        flexWrap: "wrap",
-                        gap: 12,
-                      }}
-                    >
-                      {/* Left: info */}
-                      <div style={{ flex: 1, minWidth: 200 }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            marginBottom: 8,
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: "50%",
-                              background: "#2d4a2d",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 14,
-                              fontWeight: "bold",
-                              color: "#4ade80",
-                            }}
-                          >
-                            {b.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div
-                              style={{
-                                fontWeight: "bold",
-                                color: "#c8e6c9",
-                                fontSize: 16,
-                              }}
-                            >
-                              {b.name}
-                            </div>
-                            <div style={{ fontSize: 12, color: "#6a9c6a" }}>
-                              📞 {b.phone}
-                            </div>
-                          </div>
-                        </div>
-                        <div
-                          style={{ display: "flex", gap: 16, flexWrap: "wrap" }}
-                        >
-                          <span style={{ fontSize: 13, color: "#9ab89a" }}>
-                            📍 {b.location}
-                          </span>
-                          <span style={{ fontSize: 13, color: "#9ab89a" }}>
-                            📅 Booked: {formatDate(b.bookingDate)}
-                          </span>
-                          <span style={{ fontSize: 13, color: "#4ade80" }}>
-                            📦 Delivery:{" "}
-                            {formatDate(deliveryDate(b.bookingDate))}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Right: stats + actions */}
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "flex-end",
-                          gap: 8,
-                        }}
-                      >
-                        <div style={{ textAlign: "right" }}>
-                          <div
-                            style={{
-                              fontSize: 20,
-                              fontWeight: "bold",
-                              color: "#4ade80",
-                            }}
-                          >
-                            {b.tubes.toLocaleString()} tubes
-                          </div>
-                          <div style={{ fontSize: 13, color: "#9ab89a" }}>
-                            RWF {(b.tubes * PRICE_PER_TUBE).toLocaleString()}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <a
-                            href={buildWaLink(b)}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              padding: "7px 12px",
-                              borderRadius: 7,
-                              background: "#25D366",
-                              color: "white",
-                              fontSize: 12,
-                              fontWeight: "bold",
-                              textDecoration: "none",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            💬 WhatsApp
-                          </a>
-                          <button
-                            onClick={() => handleCopy(b)}
-                            style={{
-                              padding: "7px 12px",
-                              borderRadius: 7,
-                              border: "1px solid #2d4a2d",
-                              background:
-                                copiedId === b.id ? "#1a3d1a" : "transparent",
-                              color: copiedId === b.id ? "#4ade80" : "#9ab89a",
-                              fontSize: 12,
-                              cursor: "pointer",
-                              fontFamily: "Georgia, serif",
-                            }}
-                          >
-                            {copiedId === b.id ? "✓ Copied" : "📋 Copy"}
-                          </button>
-                          <button
-                            onClick={() => handleEdit(b)}
-                            style={{
-                              padding: "7px 12px",
-                              borderRadius: 7,
-                              border: "1px solid #2d4a2d",
-                              background: "transparent",
-                              color: "#9ab89a",
-                              fontSize: 12,
-                              cursor: "pointer",
-                              fontFamily: "Georgia, serif",
-                            }}
-                          >
-                            ✏ Edit
-                          </button>
-                          <button
-                            onClick={() => setDeleteId(b.id)}
-                            style={{
-                              padding: "7px 12px",
-                              borderRadius: 7,
-                              border: "1px solid #7f1d1d",
-                              background: "transparent",
-                              color: "#f87171",
-                              fontSize: 12,
-                              cursor: "pointer",
-                              fontFamily: "Georgia, serif",
-                            }}
-                          >
-                            🗑
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              />
             )}
-          </div>
-        )}
+          </button>
+        ))}
       </div>
 
       <style>{`
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
-        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
-        button:hover { opacity: 0.88; }
-        a:hover { opacity: 0.88; }
         * { box-sizing: border-box; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+        input:focus { border-color: #4a7c59 !important; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #0f1a0f; } ::-webkit-scrollbar-thumb { background: #2d4a2d; border-radius: 2px; }
       `}</style>
     </div>
   );
