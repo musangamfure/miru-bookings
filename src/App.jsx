@@ -719,7 +719,7 @@ export default function App() {
                   accent: "#1b4332",
                 },
                 {
-                  label: "Upcoming",
+                  label: "Upcoming Deliveries",
                   value: upcoming,
                   icon: "📦",
                   accent: "#3d5a3e",
